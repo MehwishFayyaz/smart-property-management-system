@@ -1,0 +1,325 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String?
+  role      UserRole @default(TENANT)
+  phone     String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  ownedProperties Property[]       @relation("PropertyOwner")
+  managedProperties Property[]     @relation("PropertyManager")
+  tenantLeases    Lease[]          @relation("TenantLease")
+  maintenanceRequests MaintenanceRequest[]
+  notifications   Notification[]
+  payments        Payment[]
+  documents       Document[]
+
+  @@map("users")
+}
+
+model Property {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  address     String
+  city        String
+  state       String
+  zipCode     String
+  country     String       @default("US")
+  type        PropertyType
+  bedrooms    Int?
+  bathrooms   Float?
+  area        Float?
+  amenities   Json?
+  images      Json?
+  status      PropertyStatus @default(AVAILABLE)
+  purchasePrice Float?
+  currentValue  Float?
+  monthlyRent   Float?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  ownerId     String
+  owner       User         @relation("PropertyOwner", fields: [ownerId], references: [id])
+  managerId   String?
+  manager     User?        @relation("PropertyManager", fields: [managerId], references: [id])
+  
+  leases      Lease[]
+  maintenanceRequests MaintenanceRequest[]
+  expenses    Expense[]
+  documents   Document[]
+  aiAnalytics AIAnalytics[]
+
+  @@map("properties")
+}
+
+model Lease {
+  id             String      @id @default(cuid())
+  startDate      DateTime
+  endDate        DateTime
+  monthlyRent    Float
+  securityDeposit Float
+  status         LeaseStatus @default(ACTIVE)
+  terms          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  propertyId     String
+  property       Property    @relation(fields: [propertyId], references: [id])
+  tenantId       String
+  tenant         User        @relation("TenantLease", fields: [tenantId], references: [id])
+  
+  payments       Payment[]
+  documents      Document[]
+
+  @@map("leases")
+}
+
+model MaintenanceRequest {
+  id          String            @id @default(cuid())
+  title       String
+  description String
+  priority    Priority          @default(MEDIUM)
+  status      MaintenanceStatus @default(PENDING)
+  category    String
+  estimatedCost Float?
+  actualCost    Float?
+  scheduledDate DateTime?
+  completedDate DateTime?
+  contractorInfo Json?
+  images        Json?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  // Relations
+  propertyId    String
+  property      Property          @relation(fields: [propertyId], references: [id])
+  tenantId      String?
+  tenant        User?             @relation(fields: [tenantId], references: [id])
+  
+  documents     Document[]
+  expenses      Expense[]
+
+  @@map("maintenance_requests")
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  amount      Float
+  dueDate     DateTime
+  paidDate    DateTime?
+  method      PaymentMethod?
+  status      PaymentStatus @default(PENDING)
+  type        PaymentType
+  description String?
+  reference   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  leaseId     String?
+  lease       Lease?        @relation(fields: [leaseId], references: [id])
+  tenantId    String
+  tenant      User          @relation(fields: [tenantId], references: [id])
+
+  @@map("payments")
+}
+
+model Expense {
+  id          String       @id @default(cuid())
+  amount      Float
+  category    ExpenseCategory
+  description String
+  date        DateTime
+  receipt     String?
+  isRecurring Boolean      @default(false)
+  recurringFrequency String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  propertyId  String?
+  property    Property?    @relation(fields: [propertyId], references: [id])
+  maintenanceRequestId String?
+  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
+
+  @@map("expenses")
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  name        String
+  type        DocumentType
+  url         String
+  size        Int?
+  mimeType    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  propertyId  String?
+  property    Property?    @relation(fields: [propertyId], references: [id])
+  leaseId     String?
+  lease       Lease?       @relation(fields: [leaseId], references: [id])
+  maintenanceRequestId String?
+  maintenanceRequest   MaintenanceRequest? @relation(fields: [maintenanceRequestId], references: [id])
+
+  @@map("documents")
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType
+  priority  Priority           @default(MEDIUM)
+  isRead    Boolean            @default(false)
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Relations
+  userId    String
+  user      User               @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model AIAnalytics {
+  id                String   @id @default(cuid())
+  type              String
+  data              Json
+  insights          Json?
+  confidence        Float?
+  createdAt         DateTime @default(now())
+
+  // Relations
+  propertyId        String
+  property          Property @relation(fields: [propertyId], references: [id])
+
+  @@map("ai_analytics")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  PROPERTY_MANAGER
+  TENANT
+  CONTRACTOR
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  CONDO
+  TOWNHOUSE
+  COMMERCIAL
+  OFFICE
+  WAREHOUSE
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  UNAVAILABLE
+}
+
+enum LeaseStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  PENDING
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  BANK_TRANSFER
+  CREDIT_CARD
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  FAILED
+}
+
+enum PaymentType {
+  RENT
+  SECURITY_DEPOSIT
+  MAINTENANCE
+  UTILITY
+  OTHER
+}
+
+enum ExpenseCategory {
+  MAINTENANCE
+  UTILITIES
+  INSURANCE
+  TAXES
+  MANAGEMENT_FEES
+  MARKETING
+  LEGAL
+  OTHER
+}
+
+enum DocumentType {
+  LEASE_AGREEMENT
+  ID_DOCUMENT
+  INCOME_VERIFICATION
+  MAINTENANCE_RECEIPT
+  INSURANCE_DOCUMENT
+  PROPERTY_DEED
+  INSPECTION_REPORT
+  OTHER
+}
+
+enum NotificationType {
+  RENT_DUE
+  RENT_OVERDUE
+  LEASE_EXPIRING
+  MAINTENANCE_REQUEST
+  MAINTENANCE_COMPLETED
+  PAYMENT_RECEIVED
+  DOCUMENT_UPLOADED
+  AI_INSIGHT
+  SYSTEM_ALERT
+}
